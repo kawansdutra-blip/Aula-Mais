@@ -1,0 +1,48 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@11.19.0
+2 info using node@v24.21.0
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 silly config load:file:C:\Users\kakas\Documents\apptrabquarta - Copia\Aula-Mais\.npmrc
+5 silly config load:file:C:\Users\kakas\.npmrc
+6 silly config load:file:C:\Users\kakas\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm install lucide-react-native@1.70.0
+8 verbose argv "install" "lucide-react-native@1.70.0" "--ignore-scripts" "--cache" ".npm-cache" "--no-audit" "--no-fund"
+9 verbose logfile logs-max:10 dir:C:\Users\kakas\Documents\apptrabquarta - Copia\Aula-Mais\.npm-cache\_logs\2026-11-08T19_05_00_685Z-
+10 verbose logfile C:\Users\kakas\Documents\apptrabquarta - Copia\Aula-Mais\.npm-cache\_logs\2026-11-08T19_05_00_685Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:2348810240 maxSize:587202560 maxEntrySize:293601280
+13 silly idealTree buildDeps
+14 silly fetch manifest lucide-react-native@1.70.0
+15 silly packumentCache full:https://registry.npmjs.org/lucide-react-native cache-miss
+16 verbose shrinkwrap failed to load node_modules/.package-lock.json out of date, updated: node_modules
+17 http fetch GET 200 https://registry.npmjs.org/lucide-react-native 772ms (cache revalidated)
+18 silly packumentCache full:https://registry.npmjs.org/lucide-react-native set size:1984744 disposed:false
+19 silly fetch manifest @types/react@~19.2.2
+20 silly packumentCache full:https://registry.npmjs.org/@types%2freact cache-miss
+21 http fetch GET 200 https://registry.npmjs.org/@types%2freact 491ms (cache revalidated)
+22 silly packumentCache full:https://registry.npmjs.org/@types%2freact set size:2642195 disposed:false
+23 silly fetch manifest react@19.2.3
+24 silly packumentCache full:https://registry.npmjs.org/react cache-miss
+25 http fetch GET 200 https://registry.npmjs.org/react 107ms (cache revalidated)
+26 silly packumentCache full:https://registry.npmjs.org/react set size:7117214 disposed:false
+27 silly fetch manifest react-native@0.86.3
+28 silly packumentCache full:https://registry.npmjs.org/react-native cache-miss
+29 http fetch GET 200 https://registry.npmjs.org/react-native 157ms (cache revalidated)
+30 silly packumentCache full:https://registry.npmjs.org/react-native set size:16125842 disposed:false
+31 silly fetch manifest @react-native/jest-preset@0.86.3
+32 silly packumentCache full:https://registry.npmjs.org/@react-native%2fjest-preset cache-miss
+33 http fetch GET 200 https://registry.npmjs.org/@react-native%2fjest-preset 230ms (cache revalidated)
+34 silly packumentCache full:https://registry.npmjs.org/@react-native%2fjest-preset set size:573978 disposed:false
+35 silly fetch manifest react-native-svg@^15.15.4
+36 silly packumentCache full:https://registry.npmjs.org/react-native-svg cache-miss
+37 http fetch GET 200 https://registry.npmjs.org/react-native-svg 92ms (cache revalidated)
+38 silly packumentCache full:https://registry.npmjs.org/react-native-svg set size:806137 disposed:false
+39 silly placeDep ROOT lucide-react-native@1.70.0 REPLACE for: aula-mais@1.0.0 want: 1.70.0
+40 silly reify mark retired [
+40 silly reify   'C:\\Users\\kakas\\Documents\\apptrabquarta - Copia\\Aula-Mais\\node_modules\\lucide-react-native-incomplete'
+40 silly reify ]
+41 silly reify moves {
+41 silly reify   'C:\\Users\\kakas\\Documents\\apptrabquarta - Copia\\Aula-Mais\\node_modules\\lucide-react-native-incomplete': 'C:\\Users\\kakas\\Documents\\apptrabquarta - Copia\\Aula-Mais\\node_modules\\.lucide-react-native-incomplete-5dEKvMfC'
+41 silly reify }
+42 http cache lucide-react-native@https://registry.npmjs.org/lucide-react-native/-/lucide-react-native-1.70.0.tgz 0ms (cache hit)
+43 silly tarball no local data for lucide-react-native@https://registry.npmjs.org/lucide-react-native/-/lucide-react-native-1.70.0.tgz. Extracting by manifest.
