@@ -9,6 +9,7 @@ const symbols = {
   notification: { ios: 'bell', android: 'notifications', web: 'notifications' },
   menu: { ios: 'line.3.horizontal', android: 'menu', web: 'menu' },
   calendar: { ios: 'calendar', android: 'calendar_month', web: 'calendar_month' },
+  camera: { ios: 'camera', android: 'photo_camera', web: 'photo_camera' },
   chevron: { ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' },
   search: { ios: 'magnifyingglass', android: 'search', web: 'search' },
   grid: { ios: 'square.grid.2x2', android: 'grid_view', web: 'grid_view' },

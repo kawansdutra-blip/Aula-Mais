@@ -1,4 +1,4 @@
-# Welcome to your Expo app 👋
+# Welcome to your Expo app
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
@@ -22,6 +22,22 @@ In the output, you'll find options to open the app in a
 - [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
 - [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
 - [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+
+## Câmera e transcrição por voz
+
+A captura do quadro usa `expo-camera`. A transcrição usa `expo-speech-recognition`, que requer código nativo no Android e no iOS; por isso, esses recursos não funcionam no Expo Go nessas plataformas. Depois de instalar as dependências, crie e instale um development build:
+
+```bash
+npx expo run:android
+```
+
+No macOS com Xcode, use `npx expo run:ios`. Após instalar o app de desenvolvimento, inicie o Metro com:
+
+```bash
+npx expo start --dev-client
+```
+
+No navegador, use `npx expo start --web`; câmera e reconhecimento de fala dependem do suporte e das permissões do navegador. O serviço de voz do dispositivo ou navegador pode enviar áudio ao próprio fornecedor para transcrição. O Aula-Mais não envia o áudio para um servidor próprio. As fotos capturadas ficam no cache do app e a associação com a disciplina e a aula é mantida enquanto a sessão do aplicativo estiver ativa; ainda não há sincronização ou persistência após encerrar o app.
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 

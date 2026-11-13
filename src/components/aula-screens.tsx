@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ScrollView, StatusBar, Text as NativeText, TextProps, StyleSheet, View, Pressable, TextInput, Switch, Modal, Platform, Alert } from 'react-native';
+import { ScrollView, StatusBar, Text as NativeText, TextProps, StyleSheet, View, Pressable, TextInput, Switch, Modal, Platform, Alert, Image } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { getAccessibilityColors, useAccessibility } from '@/context/accessibility';
+import { getLessonArtifactKey, useLessonArtifacts } from '@/context/lesson-artifacts';
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import * as Speech from 'expo-speech';
 import { AppIcon, type AppIconName } from '@/components/app-icon';
 
@@ -140,22 +142,95 @@ function TreeDiagram({ large = false }: { large?: boolean }) {
 function Node({ value }: { value: string }) { return <View style={{ width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, borderColor: C.blue, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' }}><AppText style={{ color: C.ink, fontSize: 13, fontWeight: '700' }}>{value}</AppText></View>; }
 const treeEdge = { position: 'absolute' as const, width: 82, height: 1.5, backgroundColor: '#6e829f' };
 
+function SpeechTextControl({ text, label }: { text: string; label: string }) {
+  const { appearance, voice, readingSpeed } = useAccessibility();
+  const colors = getAccessibilityColors(appearance);
+  const [speaking, setSpeaking] = useState(false);
+  useEffect(() => () => { void Speech.stop(); }, []);
+  const toggle = async () => {
+    if (speaking) { await Speech.stop(); setSpeaking(false); return; }
+    if (!voice) { Alert.alert('Leitura por voz desativada', 'Ative a leitura por voz na aba Acessibilidade para ouvir este texto.'); return; }
+    const rate = Number(readingSpeed.replace('x', '').replace(',', '.')) || 1;
+    Speech.speak(text, { language: 'pt-BR', rate, onStart: () => setSpeaking(true), onDone: () => setSpeaking(false), onStopped: () => setSpeaking(false), onError: () => setSpeaking(false) });
+  };
+  return <Pressable onPress={() => void toggle()} accessibilityRole="button" accessibilityLabel={speaking ? `Parar ${label.toLowerCase()}` : label} style={{ minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, marginTop: 10 }}><AppIcon name={speaking ? 'pause' : 'sound'} color={colors.blue} size={18} /><AppText style={{ color: colors.blue, fontWeight: '700' }}>{speaking ? 'Parar leitura' : label}</AppText></Pressable>;
+}
+
 export function Subject() {
   const { subject } = useLocalSearchParams<{ subject: string }>();
   const course = subject || 'Matemática';
   const lesson = lessonBySubject[course] ?? lessonBySubject.Matemática;
   const { appearance, reduceMotion, readingSpeed, setReadingSpeed, voice } = useAccessibility();
+  const { lessonArtifacts, saveLessonNotes } = useLessonArtifacts();
   const colors = getAccessibilityColors(appearance);
+  const artifactKey = getLessonArtifactKey(course, lesson.title);
+  const artifacts = lessonArtifacts[artifactKey] ?? { photos: [], notes: '' };
+  const notes = artifacts.notes;
   const [tab, setTab] = useState<LessonTab>('Conteúdo');
   const [expandedDiagram, setExpandedDiagram] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [elapsed, setElapsed] = useState(24);
   const [largeTranscript, setLargeTranscript] = useState(false);
-  const [notes, setNotes] = useState('');
+  const [notesSaved, setNotesSaved] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [transcriptionDraft, setTranscriptionDraft] = useState('');
+  const [interimTranscript, setInterimTranscript] = useState('');
+  const [transcriptionError, setTranscriptionError] = useState('');
+  const recognizingRef = useRef(false);
   const speechText = `${lesson.intro}. ${lesson.description} ${lesson.transcript}`;
   const boundaryRef = useRef(Math.round(24 / lesson.duration * speechText.length));
-  useEffect(() => () => { void Speech.stop(); }, []);
+  useSpeechRecognitionEvent('start', () => { recognizingRef.current = true; setTranscribing(true); setTranscriptionError(''); });
+  useSpeechRecognitionEvent('end', () => { recognizingRef.current = false; setTranscribing(false); setInterimTranscript(''); });
+  useSpeechRecognitionEvent('result', event => {
+    const phrase = event.results[0]?.transcript?.trim() ?? '';
+    if (!phrase) return;
+    if (event.isFinal) { setTranscriptionDraft(current => [current.trim(), phrase].filter(Boolean).join(' ')); setInterimTranscript(''); }
+    else setInterimTranscript(phrase);
+  });
+  useSpeechRecognitionEvent('error', event => {
+    recognizingRef.current = false;
+    setTranscribing(false);
+    setInterimTranscript('');
+    if (event.error === 'aborted') return;
+    const messages: Record<string, string> = {
+      'not-allowed': 'Acesso ao microfone ou ao reconhecimento de voz negado. Permita o acesso nas configurações do dispositivo e tente novamente.',
+      'audio-capture': 'O microfone não pôde ser iniciado. Verifique se outro aplicativo está usando-o.',
+      'service-not-allowed': 'O reconhecimento de voz não está disponível neste dispositivo ou navegador.',
+      'language-not-supported': 'O reconhecimento em português do Brasil não está disponível neste dispositivo.',
+      network: 'A conexão com o serviço de reconhecimento falhou. Verifique a internet e tente novamente.',
+      'no-speech': 'Nenhuma fala foi detectada. Tente falar mais perto do microfone.',
+      'speech-timeout': 'A gravação parou por falta de fala. Toque novamente para continuar.',
+      busy: 'O serviço de reconhecimento está ocupado. Aguarde um momento e tente novamente.',
+      interrupted: 'A gravação foi interrompida pelo dispositivo.',
+    };
+    setTranscriptionError(messages[event.error] ?? 'Não foi possível transcrever agora. Tente novamente.');
+  });
+  useEffect(() => () => { if (recognizingRef.current) ExpoSpeechRecognitionModule.abort(); void Speech.stop(); }, []);
   useEffect(() => { if (!voice && playing) void Speech.stop(); }, [voice, playing]);
+
+  const startTranscription = async () => {
+    setTranscriptionError('');
+    if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) { setTranscriptionError('O reconhecimento de voz não está disponível neste dispositivo ou navegador.'); return; }
+    try {
+      const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!permission.granted) { setTranscriptionError('Permita o acesso ao microfone e ao reconhecimento de voz nas configurações para transcrever.'); return; }
+      await Speech.stop();
+      setPlaying(false);
+      setTranscriptionDraft('');
+      setInterimTranscript('');
+      ExpoSpeechRecognitionModule.start({ lang: 'pt-BR', interimResults: true, continuous: true, addsPunctuation: true });
+    } catch {
+      setTranscriptionError('Não foi possível iniciar o reconhecimento de voz. Tente novamente.');
+    }
+  };
+  const saveTranscriptionAsNote = () => {
+    const nextNotes = [notes.trim(), transcriptionDraft.trim()].filter(Boolean).join('\n\n');
+    saveLessonNotes(course, lesson.title, nextNotes);
+    setTranscriptionDraft('');
+    setNotesSaved(true);
+  };
+  const saveNotes = () => { saveLessonNotes(course, lesson.title, notes); setNotesSaved(true); };
+  const openCamera = () => router.push({ pathname: '/capturar-quadro', params: { course, lesson: lesson.title } } as never);
 
   const speakFrom = (startIndex: number, selectedSpeed = readingSpeed) => {
     const rate = Number(selectedSpeed.replace('x', '').replace(',', '.')) || 1;
@@ -199,11 +274,28 @@ export function Subject() {
     setReadingSpeed(nextSpeed);
     if (playing) { const position = boundaryRef.current; await Speech.stop(); speakFrom(position, nextSpeed); }
   };
+  const cameraButton = <Pressable onPress={openCamera} accessibilityRole="button" style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: colors.blue, borderRadius: 12, paddingHorizontal: 14, marginBottom: 12 }}><AppIcon name="camera" color={colors.blue} /><AppText style={{ color: colors.blue, fontWeight: '700' }}>Tirar foto do quadro</AppText></Pressable>;
+  const transcriptionCard = <Card style={{ padding: 15 }}>
+    <AppText style={{ color: colors.text, fontSize: 19, fontWeight: '600' }}>Transcrever anotações</AppText>
+    <AppText style={{ color: colors.muted, marginTop: 4, lineHeight: 20 }}>Fale em português. Depois, revise e edite o texto antes de salvá-lo nesta aula.</AppText>
+    <Pressable onPress={() => { if (transcribing) ExpoSpeechRecognitionModule.stop(); else void startTranscription(); }} accessibilityRole="button" accessibilityLabel={transcribing ? 'Encerrar gravação e transcrição' : 'Iniciar gravação e transcrição'} style={{ minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: transcribing ? '#b42318' : colors.blue, borderRadius: 10, marginTop: 12, paddingHorizontal: 12 }}><AppIcon name={transcribing ? 'pause' : 'sound'} color={appearance === 'Contraste máximo' ? '#000' : '#fff'} /><AppText style={{ color: appearance === 'Contraste máximo' ? '#000' : '#fff', fontWeight: '700' }}>{transcribing ? 'Encerrar transcrição' : 'Iniciar transcrição'}</AppText></Pressable>
+    <AppText style={{ color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 9 }}>O reconhecimento é feito pelo serviço de voz do dispositivo ou navegador e pode enviar áudio ao fornecedor desse serviço. O Aula-Mais não envia áudio para um servidor próprio.</AppText>
+    {transcriptionError ? <AppText accessibilityRole="alert" style={{ color: '#b42318', marginTop: 9, lineHeight: 19 }}>{transcriptionError}</AppText> : null}
+    {interimTranscript ? <AppText accessibilityLiveRegion="polite" style={{ color: colors.muted, marginTop: 8 }}>Ouvindo: {interimTranscript}</AppText> : null}
+    <TextInput accessibilityLabel="Texto transcrito para revisão" multiline value={transcriptionDraft} onChangeText={value => setTranscriptionDraft(value)} placeholder="A transcrição aparecerá aqui para você revisar..." placeholderTextColor={colors.muted} textAlignVertical="top" style={{ minHeight: 106, marginTop: 10, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, color: colors.text, backgroundColor: colors.surface, fontSize: 15, lineHeight: 22 }} />
+    <Pressable onPress={saveTranscriptionAsNote} disabled={!transcriptionDraft.trim()} accessibilityRole="button" style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: transcriptionDraft.trim() ? colors.blue : colors.border, borderRadius: 10, marginTop: 10 }}><AppIcon name="save" color={appearance === 'Contraste máximo' ? '#000' : '#fff'} size={18} /><AppText style={{ color: appearance === 'Contraste máximo' ? '#000' : '#fff', fontWeight: '700' }}>Salvar como anotação</AppText></Pressable>
+  </Card>;
   const tabContent = tab === 'Conteúdo' ? <>
+    {cameraButton}
     <Card style={{ padding: 16, borderRadius: 17 }}><AppText style={{ color: colors.text, fontSize: 21, marginBottom: 14 }}>Resumo da aula</AppText><AppText style={{ color: colors.text, fontWeight: '500', fontSize: 16, marginBottom: 6 }}>{lesson.intro}</AppText><AppText style={{ color: colors.muted, fontSize: 15, lineHeight: 23 }}>{lesson.description}</AppText>{course === 'Matemática' && <Pressable accessibilityRole="button" accessibilityLabel="Ampliar diagrama da árvore binária" onPress={() => setExpandedDiagram(true)} style={{ marginTop: 14 }}><TreeDiagram /></Pressable>}</Card>
     <View style={{ backgroundColor: '#102b55', borderRadius: 16, padding: 16, marginBottom: 12 }}><View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}><AppIcon name="sound" color="#fff" /><AppText style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Ouvir conteúdo</AppText></View><Pressable onPress={cycleSpeed} accessibilityRole="button" accessibilityLabel={`Velocidade ${readingSpeed}`} style={{ borderWidth: 1, borderColor: '#9bb2d4', borderRadius: 9, paddingHorizontal: 11, paddingVertical: 7 }}><AppText style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{readingSpeed}</AppText></Pressable></View><View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 22, marginVertical: 13 }}><Pressable onPress={() => { void changeTime(-15); }} accessibilityLabel="Voltar 15 segundos" style={playerCircle}><AppIcon name="rewind" color="#fff" size={20} /></Pressable><Pressable onPress={() => { void togglePlayback(); }} accessibilityRole="button" accessibilityLabel={playing ? 'Pausar conteúdo' : 'Reproduzir conteúdo'} style={[playerCircle, { width: 52, height: 52, backgroundColor: '#f4f7fc', borderColor: '#f4f7fc' }]}><AppIcon name={playing ? 'pause' : 'play'} color="#102b55" size={23} /></Pressable><Pressable onPress={() => { void changeTime(15); }} accessibilityLabel="Avançar 15 segundos" style={playerCircle}><AppIcon name="forward" color="#fff" size={20} /></Pressable></View><View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><View style={{ height: 6, flex: 1, backgroundColor: '#526985', borderRadius: 4, overflow: 'hidden' }}><View style={{ width: `${elapsed / lesson.duration * 100}%`, height: '100%', backgroundColor: '#1762e8' }} /></View><AppText style={{ color: '#fff', fontSize: 12 }}>{formatTime(elapsed)} / {formatTime(lesson.duration)}</AppText></View></View>
-    <Card style={{ padding: 16, borderRadius: 17 }}><View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}><AppText style={{ color: colors.text, fontSize: 20 }}>Transcrição</AppText><Pressable onPress={() => setLargeTranscript(value => !value)}><AppText style={{ color: colors.blue, fontWeight: '700', fontSize: 14 }}>{largeTranscript ? 'Texto normal' : 'Texto maior'}</AppText></Pressable></View><AppText style={{ color: colors.text, fontSize: largeTranscript ? 19 : 15, lineHeight: largeTranscript ? 29 : 23, paddingHorizontal: 10 }}>{lesson.transcript}</AppText></Card>
-  </> : tab === 'Quadro' ? <Card style={{ padding: 18, minHeight: 390, borderRadius: 17 }}><AppText style={{ color: colors.text, fontSize: 21, marginBottom: 6 }}>Quadro da aula</AppText><AppText style={{ color: colors.muted, marginBottom: 14 }}>Acompanhe os pontos principais da explicação.</AppText><View style={{ flex: 1, minHeight: 280, borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.surface, padding: 18 }}><AppText style={{ color: colors.blue, fontSize: 18, fontWeight: '700', textAlign: 'center' }}>{lesson.title}</AppText><View style={{ height: 1, backgroundColor: colors.border, marginVertical: 14 }} /><AppText style={{ color: colors.text, fontSize: 16, lineHeight: 25 }}>{lesson.description}</AppText>{course === 'Matemática' && <View style={{ marginTop: 20 }}><TreeDiagram /></View>}</View></Card> : <Card style={{ padding: 18, minHeight: 360, borderRadius: 17 }}><AppText style={{ color: colors.text, fontSize: 21, marginBottom: 6 }}>Minhas anotações</AppText><AppText style={{ color: colors.muted, marginBottom: 14 }}>Suas anotações ficam disponíveis enquanto esta aula estiver aberta.</AppText><TextInput multiline textAlignVertical="top" value={notes} onChangeText={setNotes} placeholder="Escreva suas anotações aqui..." placeholderTextColor={colors.muted} style={{ minHeight: 260, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, color: colors.text, backgroundColor: colors.surface, fontSize: 16, lineHeight: 24 }} /></Card>;
+    <Card style={{ padding: 16, borderRadius: 17 }}><View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}><AppText style={{ color: colors.text, fontSize: 20 }}>Transcrição da aula</AppText><Pressable onPress={() => setLargeTranscript(value => !value)}><AppText style={{ color: colors.blue, fontWeight: '700', fontSize: 14 }}>{largeTranscript ? 'Texto normal' : 'Texto maior'}</AppText></Pressable></View><AppText style={{ color: colors.text, fontSize: largeTranscript ? 19 : 15, lineHeight: largeTranscript ? 29 : 23, paddingHorizontal: 10 }}>{lesson.transcript}</AppText><SpeechTextControl text={lesson.transcript} label="Ouvir transcrição" /></Card>
+    {transcriptionCard}
+  </> : tab === 'Quadro' ? <>
+    <Card style={{ padding: 16, borderRadius: 17 }}><AppText style={{ color: colors.text, fontSize: 21, marginBottom: 6 }}>Quadro da aula</AppText><AppText style={{ color: colors.muted, marginBottom: 12 }}>Fotos confirmadas ficam vinculadas a esta disciplina e aula.</AppText>{cameraButton}{artifacts.photos.length ? artifacts.photos.map((photo, index) => <View key={`${photo.capturedAt}-${index}`} style={{ marginBottom: 12, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: colors.border }}><Image source={{ uri: photo.uri }} resizeMode="contain" style={{ width: '100%', height: 230, backgroundColor: colors.pale }} /><AppText style={{ color: colors.muted, fontSize: 12, padding: 9 }}>Foto {index + 1} · {new Date(photo.capturedAt).toLocaleString()}</AppText></View>) : <View style={{ minHeight: 160, borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed', borderRadius: 12, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', padding: 18 }}><AppIcon name="camera" color={colors.muted} size={28} /><AppText style={{ color: colors.muted, textAlign: 'center', marginTop: 8 }}>Nenhuma foto adicionada a esta aula ainda.</AppText></View>}</Card>
+  </> : <>
+    <Card style={{ padding: 18, borderRadius: 17 }}><AppText style={{ color: colors.text, fontSize: 21, marginBottom: 6 }}>Minhas anotações</AppText><AppText style={{ color: colors.muted, marginBottom: 14 }}>Edite suas notas e salve-as para esta aula.</AppText><TextInput accessibilityLabel="Anotações da aula" multiline textAlignVertical="top" value={notes} onChangeText={value => { saveLessonNotes(course, lesson.title, value); setNotesSaved(false); }} placeholder="Escreva suas anotações aqui..." placeholderTextColor={colors.muted} style={{ minHeight: 220, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, color: colors.text, backgroundColor: colors.surface, fontSize: 16, lineHeight: 24 }} /><Pressable onPress={saveNotes} accessibilityRole="button" style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 10, backgroundColor: colors.blue, marginTop: 10 }}><AppIcon name="save" color={appearance === 'Contraste máximo' ? '#000' : '#fff'} size={18} /><AppText style={{ color: appearance === 'Contraste máximo' ? '#000' : '#fff', fontWeight: '700' }}>Salvar anotações</AppText></Pressable>{notesSaved ? <AppText style={{ color: colors.green, textAlign: 'center', marginTop: 8, fontWeight: '600' }}>Anotações salvas nesta aula.</AppText> : null}{notes.trim() ? <SpeechTextControl text={notes} label="Ouvir anotações" /> : null}</Card>
+  </>;
 
   return <View style={{ flex: 1, backgroundColor: colors.background }}><StatusBar barStyle={colors.statusBar} backgroundColor={colors.surface} /><View style={{ height: 48, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.surface, borderBottomWidth: 1, borderColor: colors.border, paddingHorizontal: 16 }}><Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Voltar para aulas"><AppIcon name="arrowBack" color={colors.text} size={21} /></Pressable><AppText style={{ color: colors.text, fontSize: 18, fontWeight: '700' }}>Detalhes</AppText></View>
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ padding: 12, paddingBottom: 18 }}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 4, paddingVertical: 9 }}><View style={{ width: 38, height: 38, borderRadius: 11, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' }}><AppIcon name="lessons" color={colors.blue} /></View><View style={{ flex: 1 }}><View style={{ alignSelf: 'flex-start', borderWidth: 1, borderColor: colors.green, borderRadius: 15, paddingHorizontal: 10, paddingVertical: 3, marginBottom: 4 }}><AppText style={{ color: colors.green, fontSize: 11, fontWeight: '700' }}>{course === 'Matemática' || course === 'Português' ? '✓ Concluída' : 'Em andamento'}</AppText></View><AppText style={{ color: colors.text, fontSize: 25, fontWeight: '500' }}>{lesson.title}</AppText><AppText style={{ color: colors.muted, fontSize: 14, marginTop: 2 }}>{course} · {lesson.teacher}</AppText><View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 }}><AppIcon name="calendar" color={colors.muted} size={14} /><AppText style={{ color: colors.muted, fontSize: 12, fontWeight: '600' }}>{lesson.date}</AppText><AppIcon name="clock" color={colors.muted} size={14} /><AppText style={{ color: colors.muted, fontSize: 12, fontWeight: '600' }}>10:00</AppText></View></View></View>

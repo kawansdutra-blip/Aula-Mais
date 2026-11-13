@@ -8,7 +8,11 @@
     "scheme": "aulamais",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "Permita que o Aula-Mais use o reconhecimento de voz para transcrever suas anotações.",
+        "NSMicrophoneUsageDescription": "Permita que o Aula-Mais use o microfone para transcrever suas anotações."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -17,7 +21,12 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.anonymous.AulaMais"
     },
     "web": {
       "output": "static",
@@ -25,6 +34,24 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permita que o Aula-Mais use a câmera para fotografar o quadro e os slides da aula.",
+          "microphonePermission": "Permita que o Aula-Mais use o microfone para transcrever suas anotações.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Permita que o Aula-Mais use o microfone para transcrever suas anotações.",
+          "speechRecognitionPermission": "Permita que o Aula-Mais use o reconhecimento de voz para transcrever suas anotações.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
+        }
+      ],
       [
         "expo-splash-screen",
         {
